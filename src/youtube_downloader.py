@@ -1,5 +1,7 @@
 import os
-import validators
+from urllib.error import URLError
+
+import urllib.request
 from moviepy.editor import VideoFileClip, AudioFileClip
 from pytube import YouTube
 
@@ -13,20 +15,24 @@ class YoutubeDownloader:
         self.save_title = None
         self.save_location = None
 
-    # Gets a valid YouTube video URL from the user
     def get_valid_url(self):
         """
         Gets a valid URL from the user. This URL must be to a working YouTube video in order to be considered valid.
         """
         correct_url = False
         while not correct_url:
-            url_input = input("\nEnter the URL of the video you wish to download: ")
-            # Confirms that the given URL is to a legit YouTube video
-            if validators.url(url_input) and url_input.__contains__("youtube.com"):
+            url_input = input("\nEnter the URL of the YouTube video you wish to download: ")
+            # Confirms that the given URL is a YouTube URL
+            if not url_input.__contains__("https://www.youtube.com/"):
+                print("\nThat wasn't a YouTube video URL. Please try again.")
+                continue
+            try:
+                # Confirms that the given URL is to a legit YouTube video
+                urllib.request.urlopen(url_input)
                 correct_url = True
                 self.url = url_input
                 self.youtube_object = YouTube(self.url, on_progress_callback=self.get_progress)
-            else:
+            except URLError:
                 print("\nThe provided URL wasn't valid. Please try again.")
 
     def get_desired_media(self):
@@ -52,17 +58,21 @@ class YoutubeDownloader:
             res_list = ["144", "240", "360", "480", "720", "1080"]
             res_input = input(f"Which resolution would you like to download your video in? ({res_list})")
             if res_input in res_list:
+                # Makes sure the selected resolution is available for the video being downloaded
                 if len(yt.streams.filter(res=f"{res_input}p")) > 0:
                     valid_res_input = True
                     self.res = res_input
+                    # Since the video and audio are downloaded separately for 1080p, the process takes much longer
+                    # than lesser resolutions
+                    if res_input == "1080":
+                        download = input("NOTE: Downloading this video in HD will take considerably longer than other "
+                                         "resolutions. Would you like to continue with this resolution? (Y/N)")
+                        if download.lower() == "n":
+                            valid_res_input = False
                 else:
                     print(
-                        "\nThe provided resolution isn't provided for this video. Please pick a different resolution.")
-                if res_input == "1080":
-                    download = input("NOTE: Downloading this video in HD will take considerably longer than other "
-                                     "resolutions. Would you like to continue with this resolution? (Y/N)")
-                    if download.lower() == "n":
-                        valid_res_input = False
+                        "\nUnfortunately, this resolution isn't provided for this video. Please pick a different "
+                        "resolution.")
             else:
                 print("\nThe provided resolution is invalid. Please try again.")
 
@@ -136,7 +146,8 @@ class YoutubeDownloader:
         Prints the progress of the current download
         :param stream: Stream object being downloaded
         :param chunk: Group of bytes currently being downloaded
-        :param bytes_remaining: Integer indicating the number of bytes still to be downloaded for the current file being downloaded
+        :param bytes_remaining: Integer indicating the number of bytes still to be downloaded for the current file being
+                                downloaded
         """
         if self.res == "1080":
             print(f'Download Setup: {round((1 - bytes_remaining / stream.filesize) * 100)}% done...')
@@ -156,13 +167,15 @@ if __name__ == "__main__":
         downloader.get_save_location()
 
         yt_object = downloader.youtube_object
+        # Downloading video
         if downloader.desired_media == "v":
             downloader.get_res()
             downloader.download_video(yt_object)
+        # Downloading only audio
         else:
             downloader.download_audio(yt_object)
 
-        repeat = input("Would you like to download another video? (Y/N)")
+        repeat = input("Would you like to download another YouTube video? (Y/N)")
         if repeat.lower() == "n":
             quitting = True
             print("\nThanks for using Ryan's YouTube Downloader!")
